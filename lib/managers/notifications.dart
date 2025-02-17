@@ -133,7 +133,7 @@ class NotificationClass {
       print("did not receive tasks on notification update");
       return;
     }
-    await notificationsPlugin.cancelAll();
+    
     for (final task in tasks) {
       if (task.done) continue;
       for (final reminder in task.reminderDates) {
