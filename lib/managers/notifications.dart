@@ -122,20 +122,41 @@ class NotificationClass {
         );
   }
 
-  Future<void> scheduleDueNotifications(TaskService taskService,
-      {List<Task>? tasks}) async {
-    if (tasks == null)
+  Future<void> scheduleDueNotifications(TaskService taskService, SettingsManager settingsManager, bool scheduleAll) async {
+    List<Task>? tasks;
+
+    if (scheduleAll) {
+      // get all incomplete tasks that are due or are to be reminded in the future
       tasks = await taskService.getByFilterString(
           "done=false && (due_date > now || reminders > now)", {
         "filter_include_nulls": ["false"]
       });
+    }
+    else {
+      // just get those modified since last time we checked (with buffer)
+      Duration duration = await settingsManager.getWorkmanagerDuration();
+      tasks = await taskService.getByFilterString(
+          "updated > now-${duration.inMinutes + 5}m", {
+        "filter_include_nulls": ["false"]
+      });
+    }
+
     if (tasks == null) {
       print("did not receive tasks on notification update");
       return;
     }
-    
+
+    List<notifs.PendingNotificationRequest> pendingNotifications = await notificationsPlugin.pendingNotificationRequests();
+    List<notifs.ActiveNotification> activeNotifications = await notificationsPlugin.getActiveNotifications();
+
     for (final task in tasks) {
-      if (task.done) continue;
+      if (task.done || task.dueDate == null) {
+        //task is complete or has no due date, cancel any pending notification or displayed notification
+        pendingNotifications.where((n) => n.id == task.id).forEach((n) => notificationsPlugin.cancel(task.id));
+        activeNotifications.where((n) => n.id == task.id).forEach((n) => notificationsPlugin.cancel(task.id));
+        continue;
+      }
+
       for (final reminder in task.reminderDates) {
         scheduleNotification(
           "Reminder",

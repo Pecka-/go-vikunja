@@ -51,7 +51,8 @@ void callbackDispatcher() {
           authenticated: true);
       tz.initializeTimeZones();
 
-      return SettingsManager(new FlutterSecureStorage())
+      SettingsManager settingsManager = SettingsManager(new FlutterSecureStorage());
+      return settingsManager
           .getIgnoreCertificates()
           .then((value) async {
         print("ignoring: $value");
@@ -61,7 +62,7 @@ void callbackDispatcher() {
         NotificationClass nc = NotificationClass();
         await nc.notificationInitializer();
         return nc
-            .scheduleDueNotifications(taskService)
+            .scheduleDueNotifications(taskService, settingsManager, false)
             .then((value) => Future.value(true));
       });
     } else if (task == "refresh-token") {

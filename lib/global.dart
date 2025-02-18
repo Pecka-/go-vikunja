@@ -233,7 +233,7 @@ class VikunjaGlobalState extends State<VikunjaGlobal> {
       return new Center(child: new CircularProgressIndicator());
     }
     if (client.authenticated) {
-      notifications.scheduleDueNotifications(taskService);
+      notifications.scheduleDueNotifications(taskService, settingsManager, true);
     }
     return new VikunjaGlobalInherited(
       data: this,
