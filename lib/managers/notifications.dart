@@ -156,6 +156,10 @@ class NotificationClass {
         activeNotifications.where((n) => n.id == task.id).forEach((n) => notificationsPlugin.cancel(task.id));
         continue;
       }
+      if (task.dueDate?.isAfter(DateTime.now()) == true)
+      { // the due date is now in the future (could have been changed or could be from recurring task), remove any active notification; don't remove pending ones, and actually schedule one
+        activeNotifications.where((n) => n.id == task.id).forEach((n) => notificationsPlugin.cancel(task.id));
+      }
 
       for (final reminder in task.reminderDates) {
         scheduleNotification(
