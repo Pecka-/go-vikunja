@@ -150,15 +150,15 @@ class NotificationClass {
     List<notifs.ActiveNotification> activeNotifications = await notificationsPlugin.getActiveNotifications();
 
     for (final task in tasks) {
-      if (task.done || task.dueDate == null) {
-        //task is complete or has no due date, cancel any pending notification or displayed notification
+      if (task.done || task.dueDate == null || task.dueDate?.isAfter(DateTime.now()) == true) {
+        //task is complete, has no due date or the due date is in the future, cancel any pending notification or displayed notification
         pendingNotifications.where((n) => n.id == task.id).forEach((n) => notificationsPlugin.cancel(task.id));
         activeNotifications.where((n) => n.id == task.id).forEach((n) => notificationsPlugin.cancel(task.id));
-        continue;
-      }
-      if (task.dueDate?.isAfter(DateTime.now()) == true)
-      { // the due date is now in the future (could have been changed or could be from recurring task), remove any active notification; don't remove pending ones, and actually schedule one
-        activeNotifications.where((n) => n.id == task.id).forEach((n) => notificationsPlugin.cancel(task.id));
+        // if it's complete or has no due date, we don't need to schedule a new notification; if it's in the future, we'll schedule it later
+        if (task.done || task.dueDate == null)
+        {
+          continue;
+        }
       }
 
       for (final reminder in task.reminderDates) {
