@@ -363,6 +363,18 @@ class SettingsManager {
     await _storage.write(
         key: "theme_mode", value: newMode.toString().split('.').last);
   }
+
+  Future<DateTime> getLastNotificationSync() async {
+    String? lastSync = await _storage.read(key: "last_notification_sync");
+    if (lastSync == null) {
+      return DateTime.fromMillisecondsSinceEpoch(0);
+    }
+    return DateTime.parse(lastSync);
+  }
+
+  Future<void> setLastNotificationSync(DateTime lastSync) async {
+    await _storage.write(key: "last_notification_sync", value: lastSync.toIso8601String());
+  }
 }
 
 enum FlutterThemeMode {

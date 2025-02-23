@@ -3,6 +3,7 @@
 import 'dart:math';
 
 import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:intl/intl.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
@@ -125,6 +126,7 @@ class NotificationClass {
   Future<void> scheduleDueNotifications(TaskService taskService, SettingsManager settingsManager, bool scheduleAll) async {
     List<Task>? tasks;
 
+    DateTime newLastSync = DateTime.now();
     if (scheduleAll) {
       // get all incomplete tasks that are due or are to be reminded in the future
       tasks = await taskService.getByFilterString(
@@ -134,9 +136,10 @@ class NotificationClass {
     }
     else {
       // just get those modified since last time we checked (with buffer)
-      Duration duration = await settingsManager.getWorkmanagerDuration();
+      DateTime lastSync = (await settingsManager.getLastNotificationSync()).add(Duration(minutes: -5));
+      String formattedDate = DateFormat('yyyy-MM-dd kk:mm').format(lastSync);
       tasks = await taskService.getByFilterString(
-          "updated > now-${duration.inMinutes + 5}m", {
+          "updated >= ${formattedDate}", {
         "filter_include_nulls": ["false"]
       });
     }
@@ -185,6 +188,7 @@ class NotificationClass {
         //print("scheduled notification for time " + task.dueDate!.toString());
       }
     }
+    settingsManager.setLastNotificationSync(newLastSync);
     print("notifications scheduled successfully");
   }
 }
