@@ -124,7 +124,7 @@ class VikunjaGlobalState extends State<VikunjaGlobal> {
     _newUserService = UserAPIService(client);
     _loadCurrentUser();
     tz.initializeTimeZones();
-    notifications.notificationInitializer();
+    notifications.notificationInitializer(TaskAPIService(client));
     settingsManager.getVersionNotifications().then((value) {
       if (value == "1") {
         versionChecker.postVersionCheckSnackbar();
