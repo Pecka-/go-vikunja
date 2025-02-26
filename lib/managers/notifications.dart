@@ -2,13 +2,20 @@
 
 import 'dart:math';
 
+import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:intl/intl.dart';
 import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest.dart' as tz;
+
+import 'package:fluttertoast/fluttertoast.dart';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     as notifs;
 import 'package:rxdart/subjects.dart' as rxSub;
+import 'package:vikunja_app/api/client.dart';
+import 'package:vikunja_app/api/task_implementation.dart';
 import 'package:vikunja_app/service/services.dart';
 
 import '../models/task.dart';
@@ -24,16 +31,22 @@ class NotificationClass {
   notifs.FlutterLocalNotificationsPlugin get notificationsPlugin =>
       new notifs.FlutterLocalNotificationsPlugin();
 
-  var androidSpecificsDueDate = notifs.AndroidNotificationDetails(
+  static var androidSpecificsDueDate = notifs.AndroidNotificationDetails(
       "Vikunja1", "Due Date Notifications",
       channelDescription: "description",
       icon: 'vikunja_notification_logo',
-      importance: notifs.Importance.high);
-  var androidSpecificsReminders = notifs.AndroidNotificationDetails(
+      importance: notifs.Importance.high,
+      actions: <notifs.AndroidNotificationAction>[
+        notifs.AndroidNotificationAction("snooze", "Snooze", showsUserInterface: false, cancelNotification: true),
+        notifs.AndroidNotificationAction("complete", "Complete", showsUserInterface: false, cancelNotification: true),
+      ]);
+
+  static var androidSpecificsReminders = notifs.AndroidNotificationDetails(
       "Vikunja2", "Reminder Notifications",
       channelDescription: "description",
       icon: 'vikunja_notification_logo',
       importance: notifs.Importance.high);
+
   late notifs.DarwinNotificationDetails iOSSpecifics;
   late notifs.NotificationDetails platformChannelSpecificsDueDate;
   late notifs.NotificationDetails platformChannelSpecificsReminders;
@@ -49,15 +62,18 @@ class NotificationClass {
   Future<void> _initNotifications() async {
     var initializationSettingsAndroid =
         notifs.AndroidInitializationSettings('vikunja_logo');
+
     var initializationSettingsIOS = notifs.DarwinInitializationSettings(
         requestAlertPermission: false,
         requestBadgePermission: false,
         requestSoundPermission: false,
-        onDidReceiveLocalNotification:
-            (int? id, String? title, String? body, String? payload) async {
-          didReceiveLocalNotificationSubject.add(NotificationClass(
-              id: id, title: title, body: body, payload: payload));
-        });
+        // onDidReceiveLocalNotification:
+        //     (int? id, String? title, String? body, String? payload) async {
+        //   didReceiveLocalNotificationSubject.add(NotificationClass(
+        //       id: id, title: title, body: body, payload: payload));
+        // }
+        );
+
     var initializationSettings = notifs.InitializationSettings(
         android: initializationSettingsAndroid, iOS: initializationSettingsIOS);
     await notificationsPlugin.initialize(initializationSettings,
@@ -67,9 +83,108 @@ class NotificationClass {
         print('notification payload: ' + resp.payload!);
         selectNotificationSubject.add(resp.payload!);
       }
-    });
+    }, onDidReceiveBackgroundNotificationResponse: backgroundNotificationResponse);
     print("Notifications initialised successfully");
   }
+  
+  @pragma('vm:entry-point')
+  static void backgroundNotificationResponse(notifs.NotificationResponse response) async {
+    if (response.id == null) {
+      return;
+    }
+
+    tz.initializeTimeZones();
+    
+    final FlutterSecureStorage storage = new FlutterSecureStorage();
+    var currentUser = await storage.read(key: 'currentUser');
+    if (currentUser == null) {
+      Fluttertoast.showToast(msg: "Failed to update task");
+      return;
+    }
+    var token = await storage.read(key: currentUser);
+    var urlBase = await storage.read(key: "${currentUser}_base");
+    if (token == null) {
+      Fluttertoast.showToast(msg: "Failed to update task");
+      return;
+    }
+
+    var client = Client(null, token: token, base: urlBase, authenticated: true);
+    var taskService = TaskAPIService(client);
+    var notificationsPlugin = new notifs.FlutterLocalNotificationsPlugin();
+
+    if (response.actionId == "snooze") {
+      // showSnoozeOptions(context, (DateTime newDue) async {
+      DateTime newDue = DateTime.now().add(Duration(hours: 2));
+      await taskService.snooze(response.id ?? 0, newDue).then((success) async {
+        if (!success) {
+          Fluttertoast.showToast(msg: "Failed to snooze task");
+        } else {
+          await scheduleNotification(
+            "Due Reminder",
+            "The task is due.",
+            notificationsPlugin,
+            newDue,
+            await FlutterTimezone.getLocalTimezone(),
+            notifs.NotificationDetails(android: androidSpecificsDueDate, iOS: notifs.DarwinNotificationDetails()),
+            id: response.id,
+          );
+        }
+      });
+      // });
+    }
+    else if (response.actionId == "complete") {
+      // complete the task
+      await taskService.complete(response.id ?? 0).then((success) {
+        if (success) {
+          Fluttertoast.showToast(msg: "Task completed");
+        }
+        else {
+          Fluttertoast.showToast(msg: "Failed to complete task");
+        }
+      });
+    }
+  }
+
+  static Future<void> showSnoozeOptions(BuildContext context, Function(DateTime) onSnoozeSelected) async {
+    DateTime now = DateTime.now();
+    DateTime oneHourLater = now.add(Duration(hours: 1));
+    DateTime sixPmToday = DateTime(now.year, now.month, now.day, 18, 0);
+    if (now.isAfter(sixPmToday)) {
+      sixPmToday = sixPmToday.add(Duration(days: 1));
+    }
+    DateTime tomorrowEightAm = DateTime(now.year, now.month, now.day + 1, 8, 0);
+    DateTime saturdayTenAm = now.add(Duration(days: (6 - now.weekday) % 7 + 1)).add(Duration(hours: 10));
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Snooze Options"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              ListTile(
+                title: Text("1 hour"),
+                onTap: () => onSnoozeSelected(oneHourLater),
+              ),
+              ListTile(
+                title: Text("6pm today"),
+                onTap: () => onSnoozeSelected(sixPmToday),
+              ),
+              ListTile(
+                title: Text("Tomorrow 8am"),
+                onTap: () => onSnoozeSelected(tomorrowEightAm),
+              ),
+              ListTile(
+                title: Text("Saturday 10am"),
+                onTap: () => onSnoozeSelected(saturdayTenAm),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }  
 
   Future<void> notificationInitializer() async {
     iOSSpecifics = notifs.DarwinNotificationDetails();
@@ -84,7 +199,7 @@ class NotificationClass {
     return Future.value();
   }
 
-  Future<void> scheduleNotification(
+  static Future<void> scheduleNotification(
       String title,
       String description,
       notifs.FlutterLocalNotificationsPlugin notifsPlugin,
@@ -126,7 +241,7 @@ class NotificationClass {
   Future<void> scheduleDueNotifications(TaskService taskService, SettingsManager settingsManager, bool scheduleAll) async {
     List<Task>? tasks;
 
-    DateTime newLastSync = DateTime.now();
+    DateTime newLastSync = DateTime.now().toUtc();
     if (scheduleAll) {
       // get all incomplete tasks that are due or are to be reminded in the future
       tasks = await taskService.getByFilterString(
@@ -137,7 +252,7 @@ class NotificationClass {
     else {
       // just get those modified since last time we checked (with buffer)
       DateTime lastSync = (await settingsManager.getLastNotificationSync()).add(Duration(minutes: -5));
-      String formattedDate = DateFormat('yyyy-MM-dd kk:mm').format(lastSync);
+      String formattedDate = DateFormat('yyyy-MM-dd HH:mm').format(lastSync);
       tasks = await taskService.getByFilterString(
           "updated >= ${formattedDate}", {
         "filter_include_nulls": ["false"]
