@@ -2,10 +2,12 @@
 
 import 'dart:math';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:intl/intl.dart';
 import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest.dart' as tz;
 
 import 'package:fluttertoast/fluttertoast.dart';
 
@@ -14,7 +16,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart'
 import 'package:rxdart/subjects.dart' as rxSub;
 import 'package:vikunja_app/api/client.dart';
 import 'package:vikunja_app/api/task_implementation.dart';
-import 'package:vikunja_app/global.dart';
 import 'package:vikunja_app/service/services.dart';
 
 import '../models/task.dart';
@@ -30,14 +31,8 @@ class NotificationClass {
   notifs.FlutterLocalNotificationsPlugin get notificationsPlugin =>
       new notifs.FlutterLocalNotificationsPlugin();
 
-  var androidSpecificsDueDate = notifs.AndroidNotificationDetails(
+  static var androidSpecificsDueDate = notifs.AndroidNotificationDetails(
       "Vikunja1", "Due Date Notifications",
-      channelDescription: "description",
-      icon: 'vikunja_notification_logo',
-      importance: notifs.Importance.high);
-
-  var androidSpecificsReminders = notifs.AndroidNotificationDetails(
-      "Vikunja2", "Reminder Notifications",
       channelDescription: "description",
       icon: 'vikunja_notification_logo',
       importance: notifs.Importance.high,
@@ -46,8 +41,14 @@ class NotificationClass {
         notifs.AndroidNotificationAction("complete", "Complete", showsUserInterface: false, cancelNotification: true),
       ]);
 
+  static var androidSpecificsReminders = notifs.AndroidNotificationDetails(
+      "Vikunja2", "Reminder Notifications",
+      channelDescription: "description",
+      icon: 'vikunja_notification_logo',
+      importance: notifs.Importance.high);
+
   late notifs.DarwinNotificationDetails iOSSpecifics;
-  static late notifs.NotificationDetails platformChannelSpecificsDueDate;
+  late notifs.NotificationDetails platformChannelSpecificsDueDate;
   late notifs.NotificationDetails platformChannelSpecificsReminders;
 
   NotificationClass({this.id, this.body, this.payload, this.title});
@@ -58,7 +59,7 @@ class NotificationClass {
   final rxSub.BehaviorSubject<String> selectNotificationSubject =
       rxSub.BehaviorSubject<String>();
 
-  Future<void> _initNotifications(TaskAPIService taskService) async {
+  Future<void> _initNotifications() async {
     var initializationSettingsAndroid =
         notifs.AndroidInitializationSettings('vikunja_logo');
 
@@ -88,46 +89,104 @@ class NotificationClass {
   
   @pragma('vm:entry-point')
   static void backgroundNotificationResponse(notifs.NotificationResponse response) async {
-
     if (response.id == null) {
       return;
     }
 
-    var settings = SettingsManager(new FlutterSecureStorage());
-    var client = Client()
+    tz.initializeTimeZones();
+    
+    final FlutterSecureStorage storage = new FlutterSecureStorage();
+    var currentUser = await storage.read(key: 'currentUser');
+    if (currentUser == null) {
+      Fluttertoast.showToast(msg: "Failed to update task");
+      return;
+    }
+    var token = await storage.read(key: currentUser);
+    var urlBase = await storage.read(key: "${currentUser}_base");
+    if (token == null) {
+      Fluttertoast.showToast(msg: "Failed to update task");
+      return;
+    }
+
+    var client = Client(null, token: token, base: urlBase, authenticated: true);
     var taskService = TaskAPIService(client);
+    var notificationsPlugin = new notifs.FlutterLocalNotificationsPlugin();
 
     if (response.actionId == "snooze") {
-      // snooze for 30 minutes
-      var newDue = DateTime.now().add(Duration(minutes: 30));
+      // showSnoozeOptions(context, (DateTime newDue) async {
+      DateTime newDue = DateTime.now().add(Duration(hours: 2));
       await taskService.snooze(response.id ?? 0, newDue).then((success) async {
         if (!success) {
           Fluttertoast.showToast(msg: "Failed to snooze task");
-        }
-        else {
+        } else {
           await scheduleNotification(
-              "Due Reminder",
-              "The task is due.",
-              notificationsPlugin,
-              newDue,
-              await FlutterTimezone.getLocalTimezone(),
-              platformChannelSpecificsDueDate,
-              id: response.id,
-            );
+            "Due Reminder",
+            "The task is due.",
+            notificationsPlugin,
+            newDue,
+            await FlutterTimezone.getLocalTimezone(),
+            notifs.NotificationDetails(android: androidSpecificsDueDate, iOS: notifs.DarwinNotificationDetails()),
+            id: response.id,
+          );
         }
       });
+      // });
     }
     else if (response.actionId == "complete") {
       // complete the task
       await taskService.complete(response.id ?? 0).then((success) {
-        if (!success) {
+        if (success) {
+          Fluttertoast.showToast(msg: "Task completed");
+        }
+        else {
           Fluttertoast.showToast(msg: "Failed to complete task");
         }
       });
     }
   }
 
-  Future<void> notificationInitializer(TaskAPIService taskService) async {
+  static Future<void> showSnoozeOptions(BuildContext context, Function(DateTime) onSnoozeSelected) async {
+    DateTime now = DateTime.now();
+    DateTime oneHourLater = now.add(Duration(hours: 1));
+    DateTime sixPmToday = DateTime(now.year, now.month, now.day, 18, 0);
+    if (now.isAfter(sixPmToday)) {
+      sixPmToday = sixPmToday.add(Duration(days: 1));
+    }
+    DateTime tomorrowEightAm = DateTime(now.year, now.month, now.day + 1, 8, 0);
+    DateTime saturdayTenAm = now.add(Duration(days: (6 - now.weekday) % 7 + 1)).add(Duration(hours: 10));
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Snooze Options"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              ListTile(
+                title: Text("1 hour"),
+                onTap: () => onSnoozeSelected(oneHourLater),
+              ),
+              ListTile(
+                title: Text("6pm today"),
+                onTap: () => onSnoozeSelected(sixPmToday),
+              ),
+              ListTile(
+                title: Text("Tomorrow 8am"),
+                onTap: () => onSnoozeSelected(tomorrowEightAm),
+              ),
+              ListTile(
+                title: Text("Saturday 10am"),
+                onTap: () => onSnoozeSelected(saturdayTenAm),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }  
+
+  Future<void> notificationInitializer() async {
     iOSSpecifics = notifs.DarwinNotificationDetails();
     platformChannelSpecificsDueDate = notifs.NotificationDetails(
         android: androidSpecificsDueDate, iOS: iOSSpecifics);
@@ -135,7 +194,7 @@ class NotificationClass {
         android: androidSpecificsReminders, iOS: iOSSpecifics);
     currentTimeZone = await FlutterTimezone.getLocalTimezone();
     notifLaunch = await notificationsPlugin.getNotificationAppLaunchDetails();
-    await _initNotifications(taskService);
+    await _initNotifications();
     requestIOSPermissions();
     return Future.value();
   }

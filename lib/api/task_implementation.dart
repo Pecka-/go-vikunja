@@ -45,7 +45,7 @@ class TaskAPIService extends APIService implements TaskService {
   @override
   Future<bool> complete(int taskId) {
     return client
-      .post('/tasks/$taskId', body: {"done": "true"})
+      .post('/tasks/$taskId', body: {"done": true})
       .then((response) {
       if (response == null) return false;
       return response.statusCode == 200;
@@ -55,7 +55,7 @@ class TaskAPIService extends APIService implements TaskService {
   @override
   Future<bool> snooze(int taskId, DateTime newDueDate) {
     return client
-      .post('/tasks/$taskId', body: {"due_date": newDueDate.toIso8601String()})
+      .post('/tasks/$taskId', body: {"due_date": newDueDate.toUtc().toIso8601String()})
       .then((response) {
       if (response == null) return false;
       return response.statusCode == 200;

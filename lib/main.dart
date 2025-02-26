@@ -60,7 +60,7 @@ void callbackDispatcher() {
 
         TaskAPIService taskService = TaskAPIService(client);
         NotificationClass nc = NotificationClass();
-        await nc.notificationInitializer(taskService);
+        await nc.notificationInitializer();
         return nc
             .scheduleDueNotifications(taskService, settingsManager, false)
             .then((value) => Future.value(true));
