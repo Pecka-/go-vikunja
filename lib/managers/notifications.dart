@@ -1,5 +1,6 @@
 // https://medium.com/@fuzzymemory/adding-scheduled-notifications-in-your-flutter-application-19be1f82ade8
 
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -113,15 +114,17 @@ class NotificationClass {
     var notificationsPlugin = new notifs.FlutterLocalNotificationsPlugin();
 
     if (response.actionId == "snooze") {
-      // showSnoozeOptions(context, (DateTime newDue) async {
       DateTime newDue = DateTime.now().add(Duration(hours: 2));
       await taskService.snooze(response.id ?? 0, newDue).then((success) async {
         if (!success) {
           Fluttertoast.showToast(msg: "Failed to snooze task");
         } else {
+          var payloadMap = jsonDecode(response.payload!); // Deserialize the payload
+          String title = payloadMap['title']; // Extract the title
+
           await scheduleNotification(
             "Due Reminder",
-            "The task is due.",
+            "The task '" + title + "' is due.",
             notificationsPlugin,
             newDue,
             await FlutterTimezone.getLocalTimezone(),
@@ -206,7 +209,7 @@ class NotificationClass {
       DateTime scheduledTime,
       String currentTimeZone,
       notifs.NotificationDetails platformChannelSpecifics,
-      {int? id}) async {
+      {int? id, String? payload}) async {
     if (id == null) id = Random().nextInt(1000000);
     // TODO: move to setup
     tz.TZDateTime time =
@@ -216,6 +219,7 @@ class NotificationClass {
     print("scheduled notification for time " + time.toString());
     await notifsPlugin.zonedSchedule(
         id, title, description, time, platformChannelSpecifics,
+        payload: payload,
         androidScheduleMode: notifs.AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation: notifs
             .UILocalNotificationDateInterpretation
@@ -288,6 +292,7 @@ class NotificationClass {
           await FlutterTimezone.getLocalTimezone(),
           platformChannelSpecificsReminders,
           id: (reminder.reminder.millisecondsSinceEpoch / 1000).floor(),
+          payload: json.encode({ "id": task.id, "title": task.title }),
         );
       }
       if (task.hasDueDate) {
@@ -299,6 +304,7 @@ class NotificationClass {
           await FlutterTimezone.getLocalTimezone(),
           platformChannelSpecificsDueDate,
           id: task.id,
+          payload: json.encode({ "id": task.id, "title": task.title }),
         );
         //print("scheduled notification for time " + task.dueDate!.toString());
       }
