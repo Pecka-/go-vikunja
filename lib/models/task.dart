@@ -6,6 +6,12 @@ import 'package:vikunja_app/models/user.dart';
 import 'package:vikunja_app/models/taskAttachment.dart';
 import 'package:vikunja_app/utils/checkboxes_in_text.dart';
 
+enum RepeatMode {
+  fromDueDate,
+  monthly,
+  fromCompletionDate,
+}
+
 class TaskReminder {
   final int relative_period;
   final String relative_to;
@@ -44,6 +50,7 @@ class Task {
   final double? percent_done;
   final User createdBy;
   Duration? repeatAfter;
+  final int? repeatMode;
   final List<Task> subtasks;
   final List<Label> labels;
   final List<TaskAttachment> attachments;
@@ -65,6 +72,7 @@ class Task {
     this.parentTaskId,
     this.priority,
     this.repeatAfter,
+    this.repeatMode,
     this.color,
     this.position,
     this.percent_done,
@@ -110,6 +118,7 @@ class Task {
         parentTaskId = json['parent_task_id'],
         priority = json['priority'],
         repeatAfter = Duration(seconds: json['repeat_after']),
+        repeatMode = json['repeat_mode'] == null ? null : json['repeat_mode'],
         color = json['hex_color'] != null && json['hex_color'] != ''
             ? Color(int.parse(json['hex_color'], radix: 16) + 0xFF000000)
             : null,
@@ -153,6 +162,7 @@ class Task {
         'end_date': endDate?.toUtc().toIso8601String(),
         'priority': priority,
         'repeat_after': repeatAfter?.inSeconds,
+        'repeat_mode': repeatMode,
         'hex_color':
             color?.value.toRadixString(16).padLeft(8, '0').substring(2),
         'position': position,
@@ -189,6 +199,7 @@ class Task {
     double? percent_done,
     User? createdBy,
     Duration? repeatAfter,
+    int? repeatMode,
     List<Task>? subtasks,
     List<Label>? labels,
     List<TaskAttachment>? attachments,
@@ -215,6 +226,7 @@ class Task {
       percent_done: percent_done ?? this.percent_done,
       createdBy: createdBy ?? this.createdBy,
       repeatAfter: repeatAfter ?? this.repeatAfter,
+      repeatMode: repeatMode ?? this.repeatMode,
       subtasks: subtasks ?? this.subtasks,
       labels: labels ?? this.labels,
       attachments: attachments ?? this.attachments,
