@@ -162,7 +162,7 @@ abstract class TaskService {
 
   Future<Task?> update(Task task);
 
-  Future<bool> complete(int taskId);
+  Future<bool> complete(Task task);
 
   Future<bool> snooze(int taskId, DateTime newDueDate);
 

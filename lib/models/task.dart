@@ -110,7 +110,7 @@ class Task {
         parentTaskId = json['parent_task_id'],
         priority = json['priority'],
         repeatAfter = Duration(seconds: json['repeat_after']),
-        color = json['hex_color'] != ''
+        color = json['hex_color'] != null && json['hex_color'] != ''
             ? Color(int.parse(json['hex_color'], radix: 16) + 0xFF000000)
             : null,
         position = json['position'] is int

@@ -137,7 +137,8 @@ class NotificationClass {
     }
     else if (response.actionId == "complete") {
       // complete the task
-      await taskService.complete(response.id ?? 0).then((success) {
+      Task task = Task.fromJson(jsonDecode(response.payload!));
+      await taskService.complete(task).then((success) {
         if (success) {
           Fluttertoast.showToast(msg: "Task completed");
         }
@@ -292,7 +293,7 @@ class NotificationClass {
           await FlutterTimezone.getLocalTimezone(),
           platformChannelSpecificsReminders,
           id: (reminder.reminder.millisecondsSinceEpoch / 1000).floor(),
-          payload: json.encode({ "id": task.id, "title": task.title }),
+          payload: json.encode(task.toJSON()),
         );
       }
       if (task.hasDueDate) {
@@ -304,7 +305,7 @@ class NotificationClass {
           await FlutterTimezone.getLocalTimezone(),
           platformChannelSpecificsDueDate,
           id: task.id,
-          payload: json.encode({ "id": task.id, "title": task.title }),
+          payload: json.encode(task.toJSON()),
         );
         //print("scheduled notification for time " + task.dueDate!.toString());
       }

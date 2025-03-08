@@ -43,9 +43,9 @@ class TaskAPIService extends APIService implements TaskService {
   }
 
   @override
-  Future<bool> complete(int taskId) {
+  Future<bool> complete(Task task) {
     return client
-      .post('/tasks/$taskId', body: {"done": true})
+      .post('/tasks/${task.id}', body: { "done": true, "repeat_after": task.repeatAfter?.inSeconds })
       .then((response) {
       if (response == null) return false;
       return response.statusCode == 200;
