@@ -1,6 +1,7 @@
 import 'package:after_layout/after_layout.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:vikunja_app/components/Circle.dart';
 import 'package:vikunja_app/pages/project/project_task_list.dart';
 
 import '../../components/AddDialog.dart';
@@ -57,12 +58,21 @@ class _ProjectOverviewPageState extends State<ProjectOverviewPage>
     EdgeInsets insets = EdgeInsets.fromLTRB(level * 10 + 10, 0, 0, 0);
 
     bool expanded = expandedList.contains(project.id);
-    Widget icon;
+    Stack colorAndIcon;
+    Widget? icon = null;
+    Circle? projectColor = null;
+
+    if (project.color != null) {
+      projectColor = Circle(30, project.color!);
+    } 
 
     List<Widget>? children = addProjectChildren(project, level + 1);
     bool no_children = children.length == 0;
     if (no_children) {
-      icon = Icon(Icons.list);
+      if (projectColor == null)
+      {
+        icon = Icon(Icons.list);
+      }
     } else {
       if (expanded) {
         icon = Icon(Icons.arrow_drop_down_sharp);
@@ -71,6 +81,14 @@ class _ProjectOverviewPageState extends State<ProjectOverviewPage>
         icon = Icon(Icons.arrow_right_sharp);
       }
     }
+
+    colorAndIcon = Stack(
+      alignment: Alignment.center,
+      children: [
+        if (projectColor != null) projectColor,
+        if (icon != null) icon
+      ],
+    );
 
     return Column(children: [
       ListTile(
@@ -81,7 +99,7 @@ class _ProjectOverviewPageState extends State<ProjectOverviewPage>
         contentPadding: insets,
         leading: IconButton(
           disabledColor: Theme.of(context).unselectedWidgetColor,
-          icon: icon,
+          icon: colorAndIcon,
           onPressed: !no_children
               ? () {
                   setState(() {
